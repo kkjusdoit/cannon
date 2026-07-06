@@ -28,8 +28,8 @@
   },
   "compileType": "game",
   "libVersion": "latest",
-  "appid": "wx62ec966a055edb34",
-  "projectname": "quickstart",
+  "appid": "wx786172e4683db061",
+  "projectname": "童年棋趣",
   "condition": {
     "search": {
       "current": -1,

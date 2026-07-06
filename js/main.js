@@ -49,6 +49,28 @@ let G = {
   hintUsed:false, hint:null,
   placed:[], expl:null,
 };
+const TUTORIAL_KEY = 'cannon_tutorial_seen_v1';
+const TUTORIAL_STEPS = [
+  {
+    title: '第 1 步：先布阵',
+    body: '在布阵页点第一排的 3 个格点放置红军。点错了再点一次，可以取消该位置。',
+  },
+  {
+    title: '第 2 步：看谁先走',
+    body: '进入对局后先看顶部状态条，那里会提示当前轮到谁行动，或者电脑是否正在思考。',
+  },
+  {
+    title: '第 3 步：先点棋子，再点落点',
+    body: '先选中自己的棋子，棋盘上会出现闪动的可走位置。再点目标格，就能完成移动或攻击。',
+  },
+  {
+    title: '第 4 步：不会下就用按钮',
+    body: '右下角有提示、悔棋和新局。提示会给你下一步建议，适合第一次玩的用户。',
+  },
+];
+let tutorialOpen = false;
+let tutorialStep = 0;
+let tutorialSeen = false;
 
 const assets = {
   bg: loadImage('images/bg.jpg'),
@@ -95,6 +117,33 @@ function beep(type) {
   } catch (e) {
     muted = true;
   }
+}
+
+function loadTutorialSeen() {
+  try {
+    if (wx.getStorageSync) {
+      tutorialSeen = !!wx.getStorageSync(TUTORIAL_KEY);
+    }
+  } catch (e) {}
+}
+
+function markTutorialSeen() {
+  tutorialSeen = true;
+  try {
+    if (wx.setStorageSync) wx.setStorageSync(TUTORIAL_KEY, 1);
+  } catch (e) {}
+}
+
+function openTutorial(step = 0) {
+  tutorialStep = Math.max(0, Math.min(TUTORIAL_STEPS.length - 1, step));
+  tutorialOpen = true;
+  dirty = true;
+}
+
+function closeTutorial() {
+  tutorialOpen = false;
+  markTutorialSeen();
+  dirty = true;
 }
 
 /* ════════════════════════════════════════════════════════
@@ -245,7 +294,11 @@ function star(cx,cy,outerR,innerR,color) {
 
 /* Touch hit-zones (rebuilt each frame) */
 let hits = [];
-function addHit(x,y,w,h,fn) { hits.push({x,y,w,h,fn}); }
+let suppressHits = false;
+function addHit(x,y,w,h,fn) {
+  if (suppressHits) return;
+  hits.push({x,y,w,h,fn});
+}
 
 /* Draw a rounded button with optional primary / active style */
 function btn(x,y,w,h,label,sub,active,disabled,primary) {
@@ -279,6 +332,22 @@ function sectionLabel(text, y) {
   ctx.fillStyle=C.txDim; ctx.textAlign='left';
   ctx.font=`600 ${Math.round(P*.92)}px sans-serif`;
   ctx.fillText(text, CONTENT_X, y);
+}
+
+function wrapText(text, x, y, maxWidth, lineHeight) {
+  const lines = [];
+  let line = '';
+  for (const ch of text) {
+    const test = line + ch;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = ch;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight));
 }
 
 function drawBackdrop() {
@@ -395,20 +464,55 @@ function drawPieces(flip, boardY) {
     legalMoves(s,G.st.c,G.st.turn).filter(m=>Cm(m)===G.sel).forEach(m=>{
       const {x,y}=nxy(Wm(m),flip,boardY);
       if (G.st.turn===0) {
-        ctx.beginPath(); ctx.arc(x,y,PR*(Tm(m)?1.08:0.88)*pulse,0,Math.PI*2);
-        ctx.fillStyle=Tm(m)?'rgba(201,53,39,0.24)':'rgba(201,53,39,0.14)';
-        ctx.fill();
-        ctx.beginPath(); ctx.arc(x,y,PR*(Tm(m)?0.84:0.64)*pulse,0,Math.PI*2);
-        ctx.strokeStyle=Tm(m)?'rgba(255,120,104,0.98)':'rgba(255,112,96,0.88)';
-        ctx.lineWidth=Tm(m)?3.2:2.4;
+        const targetPulse = Tm(m) ? 1.25 : 0.92;
+        const ringR = PR * targetPulse * (0.9 + pulse * 0.14);
+        const coreR = PR * (Tm(m) ? 0.34 : 0.2);
+        const from = nxy(G.sel, flip, boardY);
+        ctx.save();
+        ctx.shadowColor = Tm(m) ? 'rgba(255,87,66,0.95)' : 'rgba(255,112,96,0.55)';
+        ctx.shadowBlur = Tm(m) ? 16 : 10;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = Tm(m) ? 'rgba(255,109,91,0.78)' : 'rgba(255,128,120,0.48)';
+        ctx.lineWidth = Tm(m) ? 4.2 : 2.2;
+        ctx.setLineDash(Tm(m) ? [8, 6] : [5, 7]);
         ctx.stroke();
-        ctx.beginPath(); ctx.arc(x,y,PR*(Tm(m)?0.24:0.18),0,Math.PI*2);
-        ctx.fillStyle='rgba(255,132,118,0.95)';
+        ctx.setLineDash([]);
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(x,y,ringR,0,Math.PI*2);
+        ctx.fillStyle=Tm(m)?'rgba(217,53,39,0.16)':'rgba(201,53,39,0.10)';
+        ctx.fill();
+        ctx.beginPath(); ctx.arc(x,y,ringR,0,Math.PI*2);
+        ctx.strokeStyle=Tm(m)?'rgba(255,120,104,1)':'rgba(255,112,96,0.92)';
+        ctx.lineWidth=Tm(m)?4:2.4;
+        ctx.stroke();
+        ctx.beginPath(); ctx.arc(x,y,coreR,0,Math.PI*2);
+        ctx.fillStyle=Tm(m)?'rgba(255,174,162,1)':'rgba(255,132,118,0.95)';
         ctx.fill();
       } else {
         if (Tm(m)) {
-          ctx.beginPath(); ctx.arc(x,y,PR*.88,0,Math.PI*2);
-          ctx.strokeStyle=C.red; ctx.lineWidth=2.5; ctx.stroke();
+          const from = nxy(G.sel, flip, boardY);
+          ctx.save();
+          ctx.shadowColor='rgba(255,87,66,0.95)';
+          ctx.shadowBlur=16;
+          ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(x, y);
+          ctx.strokeStyle='rgba(255,109,91,0.78)';
+          ctx.lineWidth=4;
+          ctx.setLineDash([8, 6]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+          ctx.beginPath(); ctx.arc(x,y,PR*1.2,0,Math.PI*2);
+          ctx.fillStyle='rgba(255,84,60,0.18)';
+          ctx.fill();
+          ctx.beginPath(); ctx.arc(x,y,PR*1.2,0,Math.PI*2);
+          ctx.strokeStyle='rgba(255,151,129,0.98)';
+          ctx.lineWidth=3.2;
+          ctx.stroke();
+          ctx.beginPath(); ctx.arc(x,y,PR*.34,0,Math.PI*2);
+          ctx.fillStyle='rgba(255,214,145,0.98)';
+          ctx.fill();
         } else {
           ctx.beginPath(); ctx.arc(x,y,PR*.5,0,Math.PI*2);
           ctx.fillStyle='rgba(192,57,43,.52)'; ctx.fill();
@@ -490,9 +594,9 @@ function renderSetup() {
   let y=TITLE_Y;
   ctx.textAlign='center';
   ctx.font=`700 ${Math.round(Math.min(24, SCREEN_WIDTH*.08))}px sans-serif`;
-  ctx.fillStyle=C.gold; ctx.fillText('红军打鬼子', tx, y);
+  ctx.fillStyle=C.gold; ctx.fillText('童年棋趣', tx, y);
   ctx.font=`600 ${Math.round(Math.min(14, SCREEN_WIDTH*.033))}px sans-serif`;
-  ctx.fillStyle=C.txDim; ctx.fillText('5x5 战术沙盘 · 以少胜多', tx, SUBTITLE_Y);
+  ctx.fillStyle=C.txDim; ctx.fillText('5x5 复古棋戏合集 · 新手半分钟上手', tx, SUBTITLE_Y);
   y = TOP_CLEAR + 26;
 
   const bw=(CONTENT_W-P)/2;
@@ -537,6 +641,11 @@ function renderSetup() {
   const sx=(SCREEN_WIDTH-sw)/2, sy=SCREEN_HEIGHT-BOTTOM_CLEAR-sh-22;
   btn(sx,sy,sw,sh,'开始对局',null,false,false,'primary');
   addHit(sx,sy,sw,sh,()=>reset());
+
+  const tw = Math.min(180, CONTENT_W);
+  const tx0 = SCREEN_WIDTH - CONTENT_X - tw;
+  btn(tx0, sy - sh - 14, tw, Math.round(sh * 0.88), '新手引导', '半分钟上手', false, false);
+  addHit(tx0, sy - sh - 14, tw, Math.round(sh * 0.88), ()=>openTutorial(0));
 }
 
 /* ── PLACING ── */
@@ -601,15 +710,15 @@ function renderPlaying() {
   const sc=popcount(G.st.s);
   let tLabel, tColor;
   if (G.thinking) {
-    tLabel = G.st.turn===0?'红军正在运筹帷幄...':'鬼子正在调兵遣将...';
+    tLabel = G.st.turn===0?'我方正在思考...':'对方正在思考...';
     tColor = C.gold;
   } else if (G.over) {
-    tLabel = G.over.winner===0?'🎉 红军胜利':'💀 鬼子获胜';
+    tLabel = G.over.winner===0?'🎉 我方胜利':'💀 对方胜利';
     tColor = G.over.winner===0?C.red:C.txDim;
   } else {
     const hu=G.mode==='pvp'||G.st.turn===G.side;
-    if (G.st.turn===0) { tLabel=hu?'轮到红军行动':'电脑控制红军'; tColor=C.red; }
-    else { tLabel=hu?'轮到鬼子行动':'电脑控制鬼子'; tColor=C.oliveHi; }
+    if (G.st.turn===0) { tLabel=hu?'轮到我方行动':'电脑控制我方'; tColor=C.red; }
+    else { tLabel=hu?'轮到对方行动':'电脑控制对方'; tColor=C.oliveHi; }
   }
   ctx.textAlign='center';
   ctx.font=`700 ${Math.round(Math.min(21, SCREEN_WIDTH*.044))}px sans-serif`;
@@ -620,8 +729,8 @@ function renderPlaying() {
 
   /* Camp labels */
   ctx.font=`600 ${Math.round(Math.min(12, SCREEN_WIDTH*.028))}px sans-serif`;
-  ctx.fillStyle=flip?C.txDim:C.red;   ctx.fillText(flip?'鬼子部队':'红军主力',     SCREEN_WIDTH/2, layout.topCampY);
-  ctx.fillStyle=flip?C.red:C.txDim; ctx.fillText(flip?'红军主力部队':'鬼子部队', SCREEN_WIDTH/2, layout.bottomCampY);
+  ctx.fillStyle=flip?C.txDim:C.red;   ctx.fillText(flip?'对方':'我方',     SCREEN_WIDTH/2, layout.topCampY);
+  ctx.fillStyle=flip?C.red:C.txDim; ctx.fillText(flip?'我方':'对方', SCREEN_WIDTH/2, layout.bottomCampY);
 
   drawBoard(layout.boardY);
   drawPieces(flip, layout.boardY);
@@ -655,6 +764,10 @@ function renderPlaying() {
     ctx.font=`600 ${Math.round(Math.min(14, SCREEN_WIDTH*.033))}px sans-serif`;
     ctx.fillText('★ 建议走法已标出', SCREEN_WIDTH/2, layout.controlsY+PLAY_CH+Math.round(P*.8));
   }
+
+  const helpW = Math.min(120, CONTENT_W * 0.28);
+  btn(CONTENT_X, layout.controlsY - PLAY_CH - 12, helpW, Math.round(PLAY_CH * 0.84), '新手引导', null, false, false);
+  addHit(CONTENT_X, layout.controlsY - PLAY_CH - 12, helpW, Math.round(PLAY_CH * 0.84), ()=>openTutorial(0));
 }
 
 /* ── GAME OVER overlay ── */
@@ -702,6 +815,64 @@ function renderOver() {
   addHit(rbX,rbY,rbW,rbH,()=>{phase=PH.SETUP;dirty=true;});
 }
 
+function renderTutorial() {
+  ctx.fillStyle='rgba(8,12,9,.78)';
+  ctx.fillRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT);
+
+  const cw = Math.min(SCREEN_WIDTH - P * 2, 520);
+  const ch = Math.min(SCREEN_HEIGHT * 0.68, 520);
+  const cx = (SCREEN_WIDTH - cw) / 2;
+  const cy = (SCREEN_HEIGHT - ch) / 2;
+  rrect(cx, cy, cw, ch, 16, 'rgba(17,24,18,.98)', 'rgba(214,167,46,.32)', 1.2);
+
+  ctx.textAlign='left';
+  ctx.fillStyle=C.gold;
+  ctx.font=`700 ${Math.round(Math.min(26, SCREEN_WIDTH*.064))}px sans-serif`;
+  ctx.fillText('新手引导', cx + P, cy + P * 1.8);
+
+  const step = TUTORIAL_STEPS[tutorialStep];
+  ctx.fillStyle=C.tx;
+  ctx.font=`700 ${Math.round(Math.min(22, SCREEN_WIDTH*.05))}px sans-serif`;
+  ctx.fillText(step.title, cx + P, cy + P * 3.6);
+  ctx.font=`600 ${Math.round(Math.min(15, SCREEN_WIDTH*.034))}px sans-serif`;
+  ctx.fillStyle=C.txDim;
+  wrapText(step.body, cx + P, cy + P * 4.7, cw - P * 2, Math.round(P * 2.1));
+
+  const barY = cy + ch - P * 4.8;
+  const dotGap = 18;
+  const startX = cx + P;
+  TUTORIAL_STEPS.forEach((_, i) => {
+    ctx.beginPath();
+    ctx.arc(startX + i * dotGap, barY, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = i === tutorialStep ? C.red : 'rgba(255,255,255,0.22)';
+    ctx.fill();
+  });
+
+  const btnY = cy + ch - P * 3.2;
+  const bw = Math.floor((cw - P * 3) / 3);
+  const bh = Math.round(Math.max(42, SCREEN_HEIGHT * 0.055));
+  const prevX = cx + P;
+  const nextX = prevX + bw + P;
+  const closeX = nextX + bw + P;
+  btn(prevX, btnY, bw, bh, '上一页', null, false, tutorialStep === 0);
+  btn(nextX, btnY, bw, bh, tutorialStep === TUTORIAL_STEPS.length - 1 ? '开始游戏' : '下一页', null, false, false, 'primary');
+  btn(closeX, btnY, bw, bh, '关闭', null, false, false);
+  addHit(prevX, btnY, bw, bh, ()=>{
+    if (tutorialStep > 0) tutorialStep -= 1;
+    dirty = true;
+  });
+  addHit(nextX, btnY, bw, bh, ()=>{
+    if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+      tutorialStep += 1;
+      dirty = true;
+    } else {
+      closeTutorial();
+    }
+  });
+  addHit(closeX, btnY, bw, bh, closeTutorial);
+  addHit(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, closeTutorial);
+}
+
 /* ════════════════════════════════════════════════════════
    11.  RENDER LOOP
 ════════════════════════════════════════════════════════ */
@@ -710,6 +881,20 @@ let dirty = true;
 function render() {
   hits=[];
   ctx.clearRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT);
+  if (tutorialOpen) {
+    suppressHits = true;
+    drawBackdrop();
+    drawHeaderPanel();
+    if (G.st) {
+      renderPlaying();
+    } else {
+      renderSetup();
+    }
+    suppressHits = false;
+    renderTutorial();
+    return;
+  }
+  suppressHits = false;
   switch(phase) {
     case PH.SETUP: renderSetup();  break;
     case PH.PLACE: renderPlacing();break;
@@ -733,6 +918,12 @@ function onTouch(touches) {
   const t = touches[0];
   const tx = t.clientX !== undefined ? t.clientX : t.x;
   const ty = t.clientY !== undefined ? t.clientY : t.y;
+  if (tutorialOpen) {
+    for (const h of hits) {
+      if (tx>=h.x && tx<=h.x+h.w && ty>=h.y && ty<=h.y+h.h) { h.fn(); return; }
+    }
+    return;
+  }
   for (const h of hits) {
     if (tx>=h.x && tx<=h.x+h.w && ty>=h.y && ty<=h.y+h.h) { h.fn(); return; }
   }
@@ -743,8 +934,12 @@ function onTouch(touches) {
 ════════════════════════════════════════════════════════ */
 export default class GameEngine {
   constructor() {
+    loadTutorialSeen();
     wx.onTouchStart(e => onTouch(e.touches));
     phase=PH.SETUP; dirty=true;
+    if (!tutorialSeen) {
+      openTutorial(0);
+    }
     requestAnimationFrame(loop);
   }
 }
