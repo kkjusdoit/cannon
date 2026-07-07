@@ -53,7 +53,7 @@ const TUTORIAL_KEY = 'cannon_tutorial_seen_v1';
 const TUTORIAL_STEPS = [
   {
     title: '第 1 步：先布阵',
-    body: '在布阵页点第一排的 3 个格点放置红军。点错了再点一次，可以取消该位置。',
+    body: '在布阵页点底线的 3 个格点放置红军。点错了再点一次，可以取消该位置。',
   },
   {
     title: '第 2 步：看谁先走',
@@ -304,10 +304,16 @@ function addHit(x,y,w,h,fn) {
 function btn(x,y,w,h,label,sub,active,disabled,primary) {
   ctx.globalAlpha = disabled ? 0.32 : 1;
   if (primary) {
-    rrect(x,y,w,h,10, active?'#9e2218':C.red, 'rgba(255,210,120,0.35)', 1.5);
+    const grad = ctx.createLinearGradient(x, y, x, y + h);
+    grad.addColorStop(0, '#e85848');
+    grad.addColorStop(1, '#9e2218');
+    rrect(x,y,w,h,10, grad, 'rgba(255,210,120,0.45)', 1.8);
     ctx.fillStyle = C.tx;
   } else if (active) {
-    rrect(x,y,w,h,10, 'rgba(193,147,49,0.94)', 'rgba(255,227,142,0.58)', 1.5);
+    const grad = ctx.createLinearGradient(x, y, x, y + h);
+    grad.addColorStop(0, '#dcb04c');
+    grad.addColorStop(1, '#a67b28');
+    rrect(x,y,w,h,10, grad, 'rgba(255,227,142,0.68)', 1.5);
     ctx.fillStyle = C.ink;
   } else {
     rrect(x,y,w,h,10, 'rgba(20,32,23,0.82)', 'rgba(182,145,49,0.28)', 1);
@@ -329,19 +335,31 @@ function btn(x,y,w,h,label,sub,active,disabled,primary) {
 
 /* Small section-label text */
 function sectionLabel(text, y) {
+  ctx.fillStyle = C.gold;
+  const barH = Math.round(P * 0.88);
+  rrect(CONTENT_X, y - barH + 2, 3, barH, 1.5, C.gold);
   ctx.fillStyle=C.txDim; ctx.textAlign='left';
   ctx.font=`600 ${Math.round(P*.92)}px sans-serif`;
-  ctx.fillText(text, CONTENT_X, y);
+  ctx.fillText(text, CONTENT_X + 10, y);
 }
 
 function wrapText(text, x, y, maxWidth, lineHeight) {
   const lines = [];
   let line = '';
-  for (const ch of text) {
+  const puncts = '，。、！？）】》；：,.!?)]>';
+  
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     const test = line + ch;
+    
     if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = ch;
+      // If the character causing wrap is a punctuation, keep it on the current line
+      if (puncts.includes(ch)) {
+        line = test;
+      } else {
+        lines.push(line);
+        line = ch;
+      }
     } else {
       line = test;
     }
@@ -373,9 +391,39 @@ function drawBackdrop() {
 }
 
 function drawHeaderPanel() {
-  const panelX = CONTENT_X;
-  const panelW = SCREEN_WIDTH - CONTENT_X * 2 - (MENU_BUTTON ? Math.max(0, SCREEN_WIDTH - MENU_BUTTON.left + 6) : 0);
-  rrect(panelX, HUD_Y, Math.max(160, panelW), HUD_H, 14, 'rgba(9,16,12,0.76)', 'rgba(255,219,123,0.12)', 1);
+  const menuLeft = MENU_BUTTON ? MENU_BUTTON.left : SCREEN_WIDTH - 87;
+  const maxCenteredW = 2 * (menuLeft - 8 - SCREEN_WIDTH / 2);
+  const panelW = Math.max(180, Math.min(maxCenteredW, SCREEN_WIDTH - CONTENT_X * 2));
+  const panelX = Math.round((SCREEN_WIDTH - panelW) / 2);
+  rrect(panelX, HUD_Y, panelW, HUD_H, 14, 'rgba(9,16,12,0.76)', 'rgba(255,219,123,0.12)', 1);
+}
+
+function drawCampBadge(text, x, y, isRed) {
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  const fontSize = Math.round(Math.min(13.5, SCREEN_WIDTH * 0.032));
+  ctx.font = `700 ${fontSize}px sans-serif`;
+  
+  const tw = ctx.measureText(text).width;
+  const paddingX = 12;
+  const paddingY = 5.5;
+  const w = tw + paddingX * 2;
+  const h = fontSize + paddingY * 2;
+  const bx = x - w / 2;
+  const by = y - h / 2;
+  
+  if (isRed) {
+    rrect(bx, by, w, h, h / 2, 'rgba(126,32,27,0.85)', 'rgba(217,169,29,0.36)', 1.2);
+    ctx.fillStyle = '#fcecd2';
+  } else {
+    rrect(bx, by, w, h, h / 2, 'rgba(38,48,32,0.85)', 'rgba(113,135,90,0.36)', 1.2);
+    ctx.fillStyle = '#d5dfcc';
+  }
+  
+  ctx.fillText(text, x, y + 0.5);
+  ctx.restore();
 }
 
 /* ════════════════════════════════════════════════════════
@@ -431,28 +479,34 @@ function drawPieces(flip, boardY) {
     });
   }
 
-  /* --- Placement zone pulsing circles --- */
+  /* --- Placement zone pulsing circles (expanding ripples to guide user) --- */
   if (phase===PH.PLACE && G.placed.length<3) {
     for (let pp=0;pp<5;pp++) {
       if (!G.placed.includes(pp)) {
         const {x,y}=nxy(pp,flip,boardY);
-        const wave=(Math.sin(Date.now()/220+pp*0.8)+1)/2;
-        const outerR=PR*(0.9+wave*0.55);
-        const innerR=PR*(0.45+wave*0.18);
-        ctx.save();
-        ctx.shadowColor='rgba(255,214,96,0.9)';
-        ctx.shadowBlur=10+wave*10;
-        ctx.beginPath(); ctx.arc(x,y,outerR,0,Math.PI*2);
-        ctx.fillStyle=`rgba(255,214,96,${0.10+wave*0.16})`;
-        ctx.fill();
-        ctx.restore();
-        ctx.beginPath(); ctx.arc(x,y,outerR,0,Math.PI*2);
-        ctx.strokeStyle=`rgba(255,214,96,${0.72+wave*0.24})`;
-        ctx.lineWidth=2.6+wave*1.2;
+        
+        // Base pulse wave (0 to 1) for the main ring
+        const wave = (Math.sin(Date.now() / 200 + pp * 0.8) + 1) / 2;
+        
+        // 1. Central gold node point
+        ctx.beginPath(); ctx.arc(x, y, PR * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = C.gold; ctx.fill();
+        
+        // 2. Pulsing highlight ring
+        const innerR = PR * (0.7 + wave * 0.25);
+        ctx.beginPath(); ctx.arc(x, y, innerR, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 214, 96, ${0.4 + wave * 0.4})`;
+        ctx.lineWidth = 2.4;
         ctx.stroke();
-        ctx.beginPath(); ctx.arc(x,y,innerR,0,Math.PI*2);
-        ctx.fillStyle=`rgba(255,214,96,${0.78+wave*0.18})`;
-        ctx.fill();
+
+        // 3. Expanding ripple wave (fades out as it grows)
+        const t = (Date.now() / 1200 + pp * 0.2) % 1.0;
+        const rippleR = PR * (0.8 + t * 1.4);
+        const rippleAlpha = 0.85 * (1.0 - t);
+        ctx.beginPath(); ctx.arc(x, y, rippleR, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 214, 96, ${rippleAlpha})`;
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
       }
     }
     dirty=true; // keep animating
@@ -591,59 +645,77 @@ function renderSetup() {
   drawHeaderPanel();
 
   const tx=SCREEN_WIDTH/2;
-  let y=TITLE_Y;
+  const centerY = HUD_Y + HUD_H / 2;
+  const titleY = Math.round(centerY - 2);
+  const subtitleY = Math.round(centerY + 16);
   ctx.textAlign='center';
   ctx.font=`700 ${Math.round(Math.min(24, SCREEN_WIDTH*.08))}px sans-serif`;
-  ctx.fillStyle=C.gold; ctx.fillText('童年棋趣', tx, y);
-  ctx.font=`600 ${Math.round(Math.min(14, SCREEN_WIDTH*.033))}px sans-serif`;
-  ctx.fillStyle=C.txDim; ctx.fillText('5x5 复古棋戏合集 · 新手半分钟上手', tx, SUBTITLE_Y);
-  y = TOP_CLEAR + 26;
+  ctx.fillStyle=C.gold; ctx.fillText('童年棋趣', tx, titleY);
+  ctx.font=`600 ${Math.round(Math.min(13, SCREEN_WIDTH*.03))}px sans-serif`;
+  ctx.fillStyle=C.txDim; ctx.fillText('5x5 经典复古战棋', tx, subtitleY);
+  const sw=Math.min(300,CONTENT_W), sh=Math.round(Math.max(50, SCREEN_HEIGHT*.064));
+  const sx=(SCREEN_WIDTH-sw)/2, sy=SCREEN_HEIGHT-BOTTOM_CLEAR-sh-16;
 
+  const contentTop = TOP_CLEAR + 48;
+  const contentBottom = sy - sh - 28;
+  const availableHeight = contentBottom - contentTop;
+
+  const bh=Math.round(Math.max(46, SCREEN_HEIGHT*.057));
   const bw=(CONTENT_W-P)/2;
-  const bh=Math.round(Math.max(48, SCREEN_HEIGHT*.062));
+
+  let totalHeight = 0;
+  const modeHeight = bh + Math.round(P * 2.2);
+  if (G.mode==='pve') {
+    const oneRow = (CONTENT_W-P*3)/4 >= 82;
+    const dh = Math.round(bh * (oneRow ? 1.14 : 1.08));
+    const diffHeight = Math.round(P * 0.7) + dh * (oneRow ? 1 : 2) + (oneRow ? 0 : Math.round(P * 0.8));
+    totalHeight = modeHeight + modeHeight + diffHeight;
+  } else {
+    totalHeight = Math.round(P * 0.7) + bh;
+  }
+
+  let y = Math.max(contentTop, Math.round(contentTop + (availableHeight - totalHeight) / 2));
 
   /* Mode */
-  sectionLabel('对战模式', y - Math.round(P * 0.8)); 
+  sectionLabel('对战模式', y - Math.round(P * 0.7)); 
   btn(CONTENT_X,y,bw,bh,'人机对战',null,G.mode==='pve',false);
   btn(CONTENT_X+P+bw,y,bw,bh,'双人对局',null,G.mode==='pvp',false);
   addHit(CONTENT_X,y,bw,bh,()=>{G.mode='pve';dirty=true;});
   addHit(CONTENT_X+P+bw,y,bw,bh,()=>{G.mode='pvp';dirty=true;});
-  y += bh + Math.round(P * 2.3);
+  y += bh + Math.round(P * 2.2);
 
   if (G.mode==='pve') {
     /* Side */
-    sectionLabel('选择阵营', y - Math.round(P * 0.8));
+    sectionLabel('选择阵营', y - Math.round(P * 0.7));
     btn(CONTENT_X,y,bw,bh,'我执红军',null,G.side===0,false);
     btn(CONTENT_X+P+bw,y,bw,bh,'我执鬼子',null,G.side===1,false);
     addHit(CONTENT_X,y,bw,bh,()=>{G.side=0;dirty=true;});
     addHit(CONTENT_X+P+bw,y,bw,bh,()=>{G.side=1;dirty=true;});
-    y += bh + Math.round(P * 2.3);
+    y += bh + Math.round(P * 2.2);
 
     /* Difficulty */
-    sectionLabel('人工智能', y - Math.round(P * 0.8));
+    sectionLabel('人工智能', y - Math.round(P * 0.7));
     const diffs=[{l:0,n:'新丁',s:'常有昏招'},{l:1,n:'老把式',s:'稳扎稳打'},
                  {l:2,n:'高手',s:'算路颇深'},{l:3,n:'神机',s:'深算十步'}];
     const oneRow = (CONTENT_W-P*3)/4 >= 82;
     const dw = oneRow ? (CONTENT_W-P*3)/4 : (CONTENT_W-P)/2;
-    const dh = Math.round(bh * (oneRow ? 1.22 : 1.14));
+    const dh = Math.round(bh * (oneRow ? 1.14 : 1.08));
     diffs.forEach((d,i)=>{
       const col = oneRow ? i : i % 2;
       const row = oneRow ? 0 : Math.floor(i / 2);
       const dx = CONTENT_X + col * (dw + P);
-      const dy = y + row * (dh + P);
+      const dy = y + row * (dh + Math.round(P * 0.8));
       btn(dx,dy,dw,dh,d.n,d.s,G.level===d.l,false);
       addHit(dx,dy,dw,dh,()=>{G.level=d.l;dirty=true;});
     });
   }
 
   /* Start */
-  const sw=Math.min(280,CONTENT_W), sh=Math.round(Math.max(50, SCREEN_HEIGHT*.068));
-  const sx=(SCREEN_WIDTH-sw)/2, sy=SCREEN_HEIGHT-BOTTOM_CLEAR-sh-22;
   btn(sx,sy,sw,sh,'开始对局',null,false,false,'primary');
   addHit(sx,sy,sw,sh,()=>reset());
 
-  const tw = Math.min(180, CONTENT_W);
-  const tx0 = SCREEN_WIDTH - CONTENT_X - tw;
+  const tw = Math.min(176, CONTENT_W * 0.52);
+  const tx0 = (SCREEN_WIDTH - tw) / 2;
   btn(tx0, sy - sh - 14, tw, Math.round(sh * 0.88), '新手引导', '半分钟上手', false, false);
   addHit(tx0, sy - sh - 14, tw, Math.round(sh * 0.88), ()=>openTutorial(0));
 }
@@ -657,16 +729,18 @@ function renderPlacing() {
 
   const n=G.placed.length;
   ctx.textAlign='center';
-  ctx.font=`700 ${Math.round(Math.min(24, SCREEN_WIDTH*.058))}px sans-serif`;
-  ctx.fillStyle=C.tx; ctx.fillText(`自定义布阵 ${n}/3`, SCREEN_WIDTH/2, TITLE_Y);
-  ctx.font=`700 ${Math.round(Math.min(18, SCREEN_WIDTH*.043))}px sans-serif`;
+  const centerY = HUD_Y + HUD_H / 2;
+  const titleY = Math.round(centerY - 2);
+  const subtitleY = Math.round(centerY + 16);
+  ctx.font=`700 ${Math.round(Math.min(19, SCREEN_WIDTH*.05))}px sans-serif`;
+  ctx.fillStyle=C.tx; ctx.fillText(`自定义布阵 ${n}/3`, SCREEN_WIDTH/2, titleY);
+  ctx.font=`700 ${Math.round(Math.min(13.5, SCREEN_WIDTH*.036))}px sans-serif`;
   ctx.fillStyle=C.gold;
-  ctx.fillText(n<3?'点击第一排格点放置红军':'阵地就绪，点击确认开战', SCREEN_WIDTH/2, SUBTITLE_Y);
+  ctx.fillText(n<3?'点击底线格点放置红军':'阵地就绪，点击确认开战', SCREEN_WIDTH/2, subtitleY);
 
   /* Camp labels */
-  ctx.font=`700 ${Math.round(Math.min(17, SCREEN_WIDTH*.039))}px sans-serif`;
-  ctx.fillStyle=C.txDim; ctx.fillText('鬼子部队',     SCREEN_WIDTH/2, layout.topCampY);
-  ctx.fillStyle=C.red;   ctx.fillText('红军主力部队', SCREEN_WIDTH/2, layout.bottomCampY);
+  drawCampBadge('鬼子部队', SCREEN_WIDTH/2, layout.topCampY, false);
+  drawCampBadge('红军主力部队', SCREEN_WIDTH/2, layout.bottomCampY, true);
 
   drawBoard(layout.boardY);
   drawPieces(flip, layout.boardY);
@@ -694,9 +768,10 @@ function renderPlacing() {
   if (n===3) addHit(cbX,PRIMARY_BTN_Y,cbW,PRIMARY_BTN_H,()=>confirmPlace());
 
   /* Back */
-  const bkH=Math.round(40);
-  btn(CONTENT_X, HUD_Y + 6, 82, bkH,'返回',null,false,false);
-  addHit(CONTENT_X, HUD_Y + 6, 82, bkH, ()=>{phase=PH.SETUP;dirty=true;});
+  const bkH=Math.round(36);
+  const bkY = HUD_Y + 14;
+  btn(CONTENT_X, bkY, 72, bkH,'返回',null,false,false);
+  addHit(CONTENT_X, bkY, 72, bkH, ()=>{phase=PH.SETUP;dirty=true;});
 }
 
 /* ── PLAYING ── */
@@ -713,24 +788,49 @@ function renderPlaying() {
     tLabel = G.st.turn===0?'我方正在思考...':'对方正在思考...';
     tColor = C.gold;
   } else if (G.over) {
-    tLabel = G.over.winner===0?'🎉 我方胜利':'💀 对方胜利';
-    tColor = G.over.winner===0?C.red:C.txDim;
+    const isWin = G.mode === 'pve' ? (G.over.winner === G.side) : true;
+    if (G.mode === 'pvp') {
+      tLabel = G.over.winner === 0 ? '🎉 红军胜利' : '🎉 鬼子胜利';
+      tColor = G.over.winner === 0 ? C.red : C.oliveHi;
+    } else {
+      tLabel = isWin ? '🎉 我方胜利' : '💀 对方胜利';
+      tColor = isWin ? (G.side === 0 ? C.red : C.oliveHi) : (G.side === 0 ? C.oliveHi : C.red);
+    }
   } else {
-    const hu=G.mode==='pvp'||G.st.turn===G.side;
-    if (G.st.turn===0) { tLabel=hu?'轮到我方行动':'电脑控制我方'; tColor=C.red; }
-    else { tLabel=hu?'轮到对方行动':'电脑控制对方'; tColor=C.oliveHi; }
+    if (G.st.turn === 0) {
+      tColor = C.red;
+      if (G.mode === 'pvp') {
+        tLabel = '轮到红军行动';
+      } else {
+        tLabel = (G.side === 0) ? '轮到我方行动' : '电脑控制对方';
+      }
+    } else {
+      tColor = C.oliveHi;
+      if (G.mode === 'pvp') {
+        tLabel = '轮到鬼子行动';
+      } else {
+        tLabel = (G.side === 1) ? '轮到我方行动' : '电脑控制对方';
+      }
+    }
   }
   ctx.textAlign='center';
-  ctx.font=`700 ${Math.round(Math.min(21, SCREEN_WIDTH*.044))}px sans-serif`;
-  ctx.fillStyle=tColor; ctx.fillText(tLabel, SCREEN_WIDTH/2, TITLE_Y);
-  ctx.font=`600 ${Math.round(Math.min(14, SCREEN_WIDTH*.031))}px sans-serif`;
+  const centerY = HUD_Y + HUD_H / 2;
+  const titleY = Math.round(centerY - 2);
+  const subtitleY = Math.round(centerY + 16);
+  ctx.font=`700 ${Math.round(Math.min(19, SCREEN_WIDTH*.042))}px sans-serif`;
+  ctx.fillStyle=tColor; ctx.fillText(tLabel, SCREEN_WIDTH/2, titleY);
+  ctx.font=`600 ${Math.round(Math.min(12.5, SCREEN_WIDTH*.028))}px sans-serif`;
   ctx.fillStyle=C.txDim;
-  ctx.fillText(`鬼子 ${sc}/15 队 · 第 ${G.hist.length} 步`, SCREEN_WIDTH/2, SUBTITLE_Y);
+  ctx.fillText(`鬼子 ${sc}/15 队 · 第 ${G.hist.length} 步`, SCREEN_WIDTH/2, subtitleY);
 
   /* Camp labels */
-  ctx.font=`600 ${Math.round(Math.min(12, SCREEN_WIDTH*.028))}px sans-serif`;
-  ctx.fillStyle=flip?C.txDim:C.red;   ctx.fillText(flip?'对方':'我方',     SCREEN_WIDTH/2, layout.topCampY);
-  ctx.fillStyle=flip?C.red:C.txDim; ctx.fillText(flip?'我方':'对方', SCREEN_WIDTH/2, layout.bottomCampY);
+  if (G.mode==='pve') {
+    drawCampBadge(flip ? '敌方鬼子' : '敌方红军', SCREEN_WIDTH/2, layout.topCampY, !flip);
+    drawCampBadge(flip ? '我方红军' : '我方鬼子', SCREEN_WIDTH/2, layout.bottomCampY, flip);
+  } else {
+    drawCampBadge('红军主力', SCREEN_WIDTH/2, layout.topCampY, true);
+    drawCampBadge('鬼子部队', SCREEN_WIDTH/2, layout.bottomCampY, false);
+  }
 
   drawBoard(layout.boardY);
   drawPieces(flip, layout.boardY);
@@ -777,37 +877,50 @@ function renderOver() {
   /* Dark overlay */
   ctx.fillStyle='rgba(10,8,6,.84)'; ctx.fillRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT);
 
-  const cw=SCREEN_WIDTH-P*4, ch=Math.round(SCREEN_HEIGHT*.46);
+  const cw=Math.min(SCREEN_WIDTH - P*3, 420);
+  const ch=Math.round(Math.max(380, SCREEN_HEIGHT*.48));
   const cx=(SCREEN_WIDTH-cw)/2, cy=(SCREEN_HEIGHT-ch)/2;
   rrect(cx,cy,cw,ch,16, 'rgba(22,18,14,.98)', C.gold, 1.5);
 
   const isWin=G.mode==='pve'?G.over.winner===G.side:true;
   ctx.textAlign='center';
-  ctx.font=`700 ${Math.round(Math.min(28, SCREEN_WIDTH*.066))}px sans-serif`;
-  ctx.fillStyle=isWin?C.gold:C.txDim;
-  ctx.fillText(isWin?'战役大捷':'战役失利', SCREEN_WIDTH/2, cy+ch*.21);
+  ctx.font=`700 ${Math.round(Math.min(26, SCREEN_WIDTH*.06))}px sans-serif`;
+  ctx.fillStyle = isWin ? C.gold : '#e54c3c';
+  ctx.fillText(isWin?'战役大捷':'战役失利', SCREEN_WIDTH/2, cy + 46);
 
-  /* Stamp circle */
-  const sr=Math.round(SCREEN_WIDTH*.13);
-  ctx.beginPath(); ctx.arc(SCREEN_WIDTH/2,cy+ch*.43,sr,0,Math.PI*2);
-  ctx.strokeStyle=isWin?C.red:'#555'; ctx.lineWidth=3; ctx.stroke();
-  ctx.font=`700 ${Math.round(sr*.88)}px sans-serif`;
-  ctx.fillStyle=isWin?C.red:'#555';
-  ctx.fillText(isWin?'大捷':'惜败', SCREEN_WIDTH/2, cy+ch*.43+sr*.33);
+  /* Stamp circle (rotated like an authentic ink seal) */
+  const sr=Math.round(SCREEN_WIDTH*.125);
+  const stampY = 138;
+  const stampColor = isWin ? '#d43f33' : '#7f8c8d';
+  
+  ctx.save();
+  ctx.translate(SCREEN_WIDTH/2, cy + stampY);
+  ctx.rotate(isWin ? -0.06 : 0.08);
+  ctx.beginPath(); ctx.arc(0, 0, sr, 0, Math.PI*2);
+  ctx.strokeStyle = stampColor; ctx.lineWidth = 3; ctx.stroke();
+  
+  ctx.font = `700 ${Math.round(sr*0.84)}px sans-serif`;
+  ctx.fillStyle = stampColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(isWin?'大捷':'惜败', 0, 1);
+  ctx.restore();
 
   /* Reason */
   ctx.font=`600 ${Math.round(Math.min(15, SCREEN_WIDTH*.034))}px sans-serif`;
-  ctx.fillStyle=C.tx; ctx.fillText(G.over.reason, SCREEN_WIDTH/2, cy+ch*.66);
+  ctx.fillStyle=C.tx; ctx.fillText(G.over.reason, SCREEN_WIDTH/2, cy + ch - 118);
 
   /* Stats */
   const cap=15-popcount(G.st.s);
-  ctx.font=`600 ${Math.round(Math.min(14, SCREEN_WIDTH*.031))}px sans-serif`;
+  ctx.font=`600 ${Math.round(Math.min(13.5, SCREEN_WIDTH*.03))}px sans-serif`;
   ctx.fillStyle=C.txDim;
-  ctx.fillText(`共走 ${G.hist.length} 步 · 消灭鬼子 ${cap}/15 队`, SCREEN_WIDTH/2, cy+ch*.77);
+  ctx.fillText(`共走 ${G.hist.length} 步 · 消灭鬼子 ${cap}/15 队`, SCREEN_WIDTH/2, cy + ch - 92);
 
   /* Restart */
-  const rbW=Math.min(210,cw-P*2), rbH=Math.round(SCREEN_HEIGHT*.068);
-  const rbX=(SCREEN_WIDTH-rbW)/2, rbY=cy+ch*.86;
+  const rbW=Math.min(230, cw - P*2);
+  const rbH=Math.round(Math.max(44, SCREEN_HEIGHT*.058));
+  const rbX=(SCREEN_WIDTH-rbW)/2;
+  const rbY=cy + ch - 56;
   btn(rbX,rbY,rbW,rbH,'重整旗鼓，再来一局',null,false,false,'primary');
 
   // Clear board hits from renderPlaying(), only keep OVER hits
@@ -827,16 +940,16 @@ function renderTutorial() {
 
   ctx.textAlign='left';
   ctx.fillStyle=C.gold;
-  ctx.font=`700 ${Math.round(Math.min(26, SCREEN_WIDTH*.064))}px sans-serif`;
-  ctx.fillText('新手引导', cx + P, cy + P * 1.8);
+  ctx.font=`700 ${Math.round(Math.min(28, SCREEN_WIDTH*.072))}px sans-serif`;
+  ctx.fillText('新手引导', cx + P, cy + P * 1.9);
 
   const step = TUTORIAL_STEPS[tutorialStep];
   ctx.fillStyle=C.tx;
-  ctx.font=`700 ${Math.round(Math.min(22, SCREEN_WIDTH*.05))}px sans-serif`;
-  ctx.fillText(step.title, cx + P, cy + P * 3.6);
-  ctx.font=`600 ${Math.round(Math.min(15, SCREEN_WIDTH*.034))}px sans-serif`;
+  ctx.font=`700 ${Math.round(Math.min(24, SCREEN_WIDTH*.06))}px sans-serif`;
+  ctx.fillText(step.title, cx + P, cy + P * 3.7);
+  ctx.font=`600 ${Math.round(Math.min(17.5, SCREEN_WIDTH*.046))}px sans-serif`;
   ctx.fillStyle=C.txDim;
-  wrapText(step.body, cx + P, cy + P * 4.7, cw - P * 2, Math.round(P * 2.1));
+  wrapText(step.body, cx + P, cy + P * 4.9, cw - P * 2, Math.round(P * 1.6));
 
   const barY = cy + ch - P * 4.8;
   const dotGap = 18;
@@ -904,7 +1017,10 @@ function render() {
 }
 
 function loop() {
-  if (dirty) { render(); dirty=false; }
+  if (dirty) {
+    dirty = false;
+    render();
+  }
   requestAnimationFrame(loop);
 }
 

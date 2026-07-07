@@ -24,7 +24,7 @@ const PR = Math.round(Math.max(15, Math.min(24, CS * 0.17)));
 const TITLE_Y = SAFE_TOP + 34;
 const SUBTITLE_Y = TITLE_Y + 28;
 const HUD_Y = Math.round(SAFE_TOP + 10);
-const HUD_H = Math.round(Math.max(52, MENU_BOTTOM - SAFE_TOP + 18));
+const HUD_H = Math.round(Math.max(62, MENU_BOTTOM - SAFE_TOP + 24));
 const PLAY_CH = Math.round(Math.max(44, Math.min(50, SCREEN_HEIGHT * 0.055)));
 const CONTROL_GAP = 10;
 const CONTROL_W = Math.floor((CONTENT_W - CONTROL_GAP * 3) / 4);
@@ -46,7 +46,7 @@ function getPlaceLayout() {
   const boardY = centeredBoardY(SUBTITLE_Y + BOARD_TOP_GAP, boardBottomLimit - BOARD_BOTTOM_GAP);
   return {
     boardY,
-    topCampY: boardY - 16,
+    topCampY: boardY - 32,
     bottomCampY: boardY + BS + 34,
     dotsY,
   };
@@ -57,8 +57,8 @@ function getPlayLayout() {
   return {
     boardY,
     controlsY: PLAY_CTRL_Y,
-    topCampY: boardY - 14,
-    bottomCampY: boardY + BS + 22,
+    topCampY: boardY - 32,
+    bottomCampY: boardY + BS + 24,
   };
 }
 
