@@ -47,7 +47,7 @@ function getPlaceLayout() {
   return {
     boardY,
     topCampY: boardY - 32,
-    bottomCampY: boardY + BS + 34,
+    bottomCampY: boardY + BS + PR + 22,
     dotsY,
   };
 }
@@ -58,7 +58,7 @@ function getPlayLayout() {
     boardY,
     controlsY: PLAY_CTRL_Y,
     topCampY: boardY - 32,
-    bottomCampY: boardY + BS + 24,
+    bottomCampY: boardY + BS + PR + 22,
   };
 }
 
