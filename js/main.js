@@ -768,8 +768,8 @@ function renderPlacing() {
   if (n===3) addHit(cbX,PRIMARY_BTN_Y,cbW,PRIMARY_BTN_H,()=>confirmPlace());
 
   /* Back */
-  const bkH=Math.round(36);
-  const bkY = HUD_Y + 14;
+  const bkH = Math.round(Math.max(40, HUD_H - 22));
+  const bkY = HUD_Y + Math.round((HUD_H - bkH) / 2);
   btn(CONTENT_X, bkY, 72, bkH,'返回',null,false,false);
   addHit(CONTENT_X, bkY, 72, bkH, ()=>{phase=PH.SETUP;dirty=true;});
 }
@@ -866,8 +866,8 @@ function renderPlaying() {
   }
 
   const helpW = Math.min(120, CONTENT_W * 0.28);
-  btn(CONTENT_X, layout.controlsY - PLAY_CH - 12, helpW, Math.round(PLAY_CH * 0.84), '新手引导', null, false, false);
-  addHit(CONTENT_X, layout.controlsY - PLAY_CH - 12, helpW, Math.round(PLAY_CH * 0.84), ()=>openTutorial(0));
+  btn(CONTENT_X, layout.controlsY - PLAY_CH - 12, helpW, PLAY_CH, '新手引导', null, false, false);
+  addHit(CONTENT_X, layout.controlsY - PLAY_CH - 12, helpW, PLAY_CH, ()=>openTutorial(0));
 }
 
 /* ── GAME OVER overlay ── */
@@ -963,7 +963,7 @@ function renderTutorial() {
 
   const btnY = cy + ch - P * 3.2;
   const bw = Math.floor((cw - P * 3) / 3);
-  const bh = Math.round(Math.max(42, SCREEN_HEIGHT * 0.055));
+  const bh = Math.round(Math.max(44, SCREEN_HEIGHT * 0.055));
   const prevX = cx + P;
   const nextX = prevX + bw + P;
   const closeX = nextX + bw + P;
@@ -983,6 +983,7 @@ function renderTutorial() {
     }
   });
   addHit(closeX, btnY, bw, bh, closeTutorial);
+  addHit(cx, cy, cw, ch, () => {});
   addHit(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, closeTutorial);
 }
 
